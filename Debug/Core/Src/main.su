@@ -1,0 +1,9 @@
+../Core/Inc/NRF24.h:357:20:nrf24_set_payload_size	16	static
+../Core/Src/main.c:86:5:main	104	static
+../Core/Src/main.c:169:6:SystemClock_Config	88	static
+../Core/Src/main.c:213:6:nrf24_transmitter_setup	8	static
+../Core/Src/main.c:236:6:debug_dump_settings	40	static
+../Core/Src/main.c:257:5:__io_putchar	16	static
+../Core/Src/main.c:264:6:transmit_text	16	static
+../Core/Src/main.c:269:17:ReadADC_Channel	32	static
+../Core/Src/main.c:292:6:Error_Handler	4	static,ignoring_inline_asm

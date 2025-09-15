@@ -21,7 +21,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 /* USER CODE BEGIN Includes */
-
+#include "adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +56,7 @@
 
 /* USER CODE BEGIN 0 */
 
+
 /* USER CODE END 0 */
 /**
   * Initializes the Global MSP.
@@ -71,6 +72,10 @@ void HAL_MspInit(void)
   __HAL_RCC_PWR_CLK_ENABLE();
 
   /* System interrupt init*/
+
+  /** DISABLE: JTAG-DP Disabled and SW-DP Disabled
+  */
+  __HAL_AFIO_REMAP_SWJ_DISABLE();
 
   /* USER CODE BEGIN MspInit 1 */
 

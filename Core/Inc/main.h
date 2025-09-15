@@ -57,6 +57,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define X_axis_Pin GPIO_PIN_0
+#define X_axis_GPIO_Port GPIOC
+#define Y_axis_Pin GPIO_PIN_1
+#define Y_axis_GPIO_Port GPIOC
+#define Z_axis_Pin GPIO_PIN_2
+#define Z_axis_GPIO_Port GPIOC
+#define CSN_Pin_Pin GPIO_PIN_0
+#define CSN_Pin_GPIO_Port GPIOA
+#define CE_Pin_Pin GPIO_PIN_8
+#define CE_Pin_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

@@ -1,0 +1,9 @@
+../Core/Inc/NRF24.h:357:20:nrf24_set_payload_size	1
+../Core/Src/main.c:86:5:main	1
+../Core/Src/main.c:169:6:SystemClock_Config	4
+../Core/Src/main.c:213:6:nrf24_transmitter_setup	1
+../Core/Src/main.c:236:6:debug_dump_settings	1
+../Core/Src/main.c:257:5:__io_putchar	1
+../Core/Src/main.c:264:6:transmit_text	1
+../Core/Src/main.c:269:17:ReadADC_Channel	1
+../Core/Src/main.c:292:6:Error_Handler	1
