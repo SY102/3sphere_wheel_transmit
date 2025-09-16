@@ -34,34 +34,34 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := interrupt-transmit
+BUILD_ARTIFACT_NAME := Transmit
 BUILD_ARTIFACT_EXTENSION := elf
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-interrupt-transmit.elf \
+Transmit.elf \
 
 MAP_FILES += \
-interrupt-transmit.map \
+Transmit.map \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-interrupt-transmit.list \
+Transmit.list \
 
 
 # All Target
 all: main-build
 
 # Main-build Target
-main-build: interrupt-transmit.elf secondary-outputs
+main-build: Transmit.elf secondary-outputs
 
 # Tool invocations
-interrupt-transmit.elf interrupt-transmit.map: $(OBJS) $(USER_OBJS) C:\Users\sunny\STM32CubeIDE\3sphere-wheel\interrupt-transmit\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "interrupt-transmit.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\sunny\STM32CubeIDE\3sphere-wheel\interrupt-transmit\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="interrupt-transmit.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Transmit.elf Transmit.map: $(OBJS) $(USER_OBJS) C:\Users\sunny\STM32CubeIDE\workspace_1.17.0\Transmit\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Transmit.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\sunny\STM32CubeIDE\workspace_1.17.0\Transmit\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Transmit.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -70,14 +70,14 @@ default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-interrupt-transmit.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "interrupt-transmit.list"
+Transmit.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "Transmit.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) default.size.stdout interrupt-transmit.elf interrupt-transmit.list interrupt-transmit.map
+	-$(RM) Transmit.elf Transmit.list Transmit.map default.size.stdout
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
