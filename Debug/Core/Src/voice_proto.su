@@ -1,0 +1,6 @@
+../Core/Src/voice_proto.c:10:9:Voice_CalcChecksum	16	static
+../Core/Src/voice_proto.c:15:6:Voice_ValidateRaw6	24	static
+../Core/Src/voice_proto.c:23:6:Voice_Init	4	static
+../Core/Src/voice_proto.c:30:6:Voice_RxByteFromIRQ	24	static
+../Core/Src/voice_proto.c:74:6:Voice_FrameAvailable	4	static
+../Core/Src/voice_proto.c:79:6:Voice_TryPopFrame	32	static

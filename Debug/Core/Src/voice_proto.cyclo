@@ -1,0 +1,6 @@
+../Core/Src/voice_proto.c:10:9:Voice_CalcChecksum	1
+../Core/Src/voice_proto.c:15:6:Voice_ValidateRaw6	3
+../Core/Src/voice_proto.c:23:6:Voice_Init	1
+../Core/Src/voice_proto.c:30:6:Voice_RxByteFromIRQ	10
+../Core/Src/voice_proto.c:74:6:Voice_FrameAvailable	1
+../Core/Src/voice_proto.c:79:6:Voice_TryPopFrame	6
