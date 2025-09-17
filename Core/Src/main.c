@@ -67,7 +67,7 @@ typedef struct { uint16_t x,y,z; } triplet_t;
 #define ADC_MAX 4020    // 실제 최대값
 #define ADC_MIN 0
 #define ADC_NEU 2010	//ADC 중간값 4020/2
-#define ADC_DEAD_ZONE 200	//데드존 처리
+#define ADC_DEAD_ZONE 300	//데드존 처리
 
 /* USER CODE END PD */
 
