@@ -51,6 +51,7 @@
 #include "string.h"
 #include "NRF24_reg_addresses.h"
 #include "voice_proto.h"
+#include "stdlib.h"//절대값(abs)
 
 /* USER CODE END Includes */
 
@@ -82,14 +83,16 @@ extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
 extern DMA_HandleTypeDef hdma_adc1;
 extern SPI_HandleTypeDef hspi1;
+
 /* USER CODE BEGIN PV */
-//volatile uint16_t adc_values[3];
-volatile uint8_t  adc_data_ready_flag = 0;
-volatile uint32_t adc_cb_cnt = 0;
+uint8_t tx_address[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
+
 volatile uint16_t adc_buffer[3] = {0};	//ADC가 변환한 x, y, z값을 DMA가 담는 버퍼 - x, y, z 3개
 volatile uint8_t adc_conversion_complete = 0;
 
-uint8_t payload[6];
+
+volatile uint8_t  adc_data_ready_flag = 0;
+volatile uint32_t adc_cb_cnt = 0;
 
 // ===== 음성 & 상태 머신 =====
 static uint8_t rx3_byte = 0;              // USART3 1바이트 수신 버퍼
@@ -104,28 +107,31 @@ static const triplet_t VOICE_MAP[6] = {
 /*4 LEFT */ {1000,2000,2000},
 /*5 RIGHT*/ {3000,2000,2000},
 };
+
+
+uint8_t payload[6];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+
+
+
 /* USER CODE BEGIN PFP */
+void nrf24_transmitter_setup(void);
+void transmit_sensor_data(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t tx_address[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
 
 
-void nrf24_transmitter_setup(void);
+
 void transmit_sensor_data(void);
-static void transmit_triplet(uint16_t x, uint16_t y, uint16_t z);
-static inline int  iabs_int(int v) { return v>=0? v : -v; }
-static inline bool joystick_is_active(int x,int y,int z){
-  int dx = x-ADC_NEU, dy = y-ADC_NEU, dz = z-ADC_NEU;
-  return (iabs_int(dx) > ADC_DEAD_ZONE) ||
-         (iabs_int(dy) > ADC_DEAD_ZONE) ||
-         (iabs_int(dz) > ADC_DEAD_ZONE);
-}
+static bool joystick_is_active(int x, int y, int z);
+static inline int  iabs_int(int v) { return v>=0? v : -v; };
 
 
 /* USER CODE END 0 */
@@ -164,11 +170,6 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 
-
-HAL_ADCEx_Calibration_Start(&hadc1);
-
-
-
 nrf24_init();
 nrf24_transmitter_setup();
 
@@ -176,8 +177,12 @@ nrf24_transmitter_setup();
 Voice_Init();
 HAL_UART_Receive_IT(&huart3, &rx3_byte, 1);
 
+HAL_ADCEx_Calibration_Start(&hadc1);
+
 //타이머 인터럽트 시작 20ms마다
 HAL_TIM_Base_Start_IT(&htim2);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -190,73 +195,9 @@ while (1)
 
     /* USER CODE BEGIN 3 */
 
-	 // DMA 완료되면 한 번 전송
-	    if(adc_conversion_complete){
-	      adc_conversion_complete = 0;
+	if(adc_conversion_complete){	//DMA가 메모리 저장을 완료하여 콜백함수에 의해 adc_conversion_complete = 1이 되어 조건이 참이된다면
+	transmit_sensor_data();
 
-	      // 1) 최신 ADC 로컬 복사 (IRQ 안전)
-	      uint16_t x,y,z;
-	      __disable_irq();
-	      x = adc_buffer[0];
-	      y = adc_buffer[1];
-	      z = adc_buffer[2];
-	      __enable_irq();
-
-	      // 2) 조이스틱 활성 판정
-	      bool active = joystick_is_active((int)x,(int)y,(int)z);
-
-	      // 3) (조이스틱 중립일 때만) 음성 프레임 소비
-	      if (!active && Voice_FrameAvailable()){
-	        voice_frame_t vf;
-	        __disable_irq();
-	        bool ok = Voice_TryPopFrame(&vf);
-	        __enable_irq();
-	        if (ok && vf.cmd >= 0x01 && vf.cmd <= 0x05){
-	          last_cmd = vf.cmd;
-	          g_state  = ST_VOICE;       // 음성 모드 진입
-	        }
-	      }
-
-	      // 4) 상태머신으로 이번 주기 전송값 결정
-	      uint16_t tx_x = ADC_NEU, tx_y = ADC_NEU, tx_z = ADC_NEU;
-
-	      switch (g_state)
-	      {
-	        case ST_IDLE:
-	          if (active) g_state = ST_JOYSTICK;
-	          // IDLE은 정지값 유지(송신은 해도 되고 안 해도 됨: 여기선 보냄)
-	          break;
-
-	        case ST_JOYSTICK:
-	          if (!active){
-	            g_state = ST_IDLE;
-	          } else {
-	            tx_x = x; tx_y = y; tx_z = z;      // 조이스틱 값 그대로
-	          }
-	          break;
-
-	        case ST_VOICE:
-	        default:
-	          if (active){
-	            g_state = ST_JOYSTICK;            // 조이스틱 우선
-	            tx_x = x; tx_y = y; tx_z = z;
-	          } else {
-	            triplet_t t = VOICE_MAP[last_cmd];
-	            tx_x = t.x; tx_y = t.y; tx_z = t.z; // 음성 등가값
-	          }
-	          break;
-	      }
-
-	      // 5) NRF24로 6바이트 전송
-	      transmit_triplet(tx_x, tx_y, tx_z);
-
-	      // 6) 디버그 로그
-	      const char* s = (g_state==ST_JOYSTICK)?"JOY":(g_state==ST_VOICE)?"VOICE":"IDLE";
-	      if (g_state==ST_VOICE) {
-	        printf("TX[%s] CMD:0x%02X | X:%u Y:%u Z:%u\r\n", s, last_cmd, tx_x, tx_y, tx_z);
-	      } else {
-	        printf("TX[%s] X:%u Y:%u Z:%u\r\n", s, tx_x, tx_y, tx_z);
-	      }
 	    }
 
 	    __WFI(); // 저전력 대기(인터럽트가 깨움)
@@ -312,6 +253,11 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+static bool joystick_is_active(int x, int y, int z) {
+    return (abs(x - ADC_NEU) > ADC_DEAD_ZONE) ||
+           (abs(y - ADC_NEU) > ADC_DEAD_ZONE) ||
+           (abs(z - ADC_NEU) > ADC_DEAD_ZONE);
+}
 
 void nrf24_transmitter_setup(void)
 
@@ -343,36 +289,60 @@ HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, HAL_MAX_DELAY);
 return ch;
 }
 
-static void transmit_triplet(uint16_t x, uint16_t y, uint16_t z)
-{
-  uint8_t buf[6];
-  buf[0] = (uint8_t)(x & 0xFF);
-  buf[1] = (uint8_t)(x >> 8);
-  buf[2] = (uint8_t)(y & 0xFF);
-  buf[3] = (uint8_t)(y >> 8);
-  buf[4] = (uint8_t)(z & 0xFF);
-  buf[5] = (uint8_t)(z >> 8);
-
-  nrf24_transmit(buf, 6);
-}
 
 void transmit_sensor_data(void){
 	adc_conversion_complete = 0;
 
-	uint16_t local_adc_buffer[3];
+	uint16_t x,y,z;
+    __disable_irq();
+    x = adc_buffer[0];
+    y = adc_buffer[1];
+    z = adc_buffer[2];
+    __enable_irq();
+    // 2) 조이스틱 활성 판정
+  	 bool active = joystick_is_active((int)x,(int)y,(int)z);
 
-	//adc_buffer값을 local_adc_buffer에 복사
-	__disable_irq(); //복사중 모든 인터럽트 중지
-	memcpy(local_adc_buffer, (void*)adc_buffer, sizeof(adc_buffer));
-	__enable_irq(); //인터럽트 허용
-/*memcpy함수는 메모리 특정 영역을 다른 영역으로 복사한다
- *함수 기본형태-void *memcpy(붙여넣을 메모리 시작주소, 복사할 내용이 있는 메모리 시작주소, sizeof(원본);
- *함수
- */
+  	      // 3) (조이스틱 중립일 때만) 음성 프레임 소비
+  	 if (!active && Voice_FrameAvailable()){
+  	 voice_frame_t vf;
+  	 __disable_irq();
+  	 bool ok = Voice_TryPopFrame(&vf);
+  	 __enable_irq();
+     if (ok && vf.cmd >= 0x01 && vf.cmd <= 0x05){
+     last_cmd = vf.cmd;
+     g_state  = ST_VOICE;       // 음성 모드 진입
+  	  }
+    }
+  	// 4) 상태머신으로 이번 주기 전송값 결정
+  		      uint16_t tx_x = ADC_NEU, tx_y = ADC_NEU, tx_z = ADC_NEU;
 
-	uint16_t x = local_adc_buffer[0];
-	uint16_t y = local_adc_buffer[1];
-	uint16_t z = local_adc_buffer[2];
+  		      switch (g_state)
+  		      {
+  		        case ST_IDLE:
+  		          if (active) g_state = ST_JOYSTICK;
+  		          // IDLE은 정지값 유지(송신은 해도 되고 안 해도 됨: 여기선 보냄)
+  		          break;
+
+  		        case ST_JOYSTICK:
+  		          if (!active){
+  		            g_state = ST_IDLE;
+  		          } else {
+  		            tx_x = x; tx_y = y; tx_z = z;      // 조이스틱 값 그대로
+  		          }
+  		          break;
+
+  		        case ST_VOICE:
+  		        default:
+  		          if (active){
+  		            g_state = ST_JOYSTICK;            // 조이스틱 우선
+  		            tx_x = x; tx_y = y; tx_z = z;
+  		          } else {
+  		            triplet_t t = VOICE_MAP[last_cmd];
+  		            tx_x = t.x; tx_y = t.y; tx_z = t.z; // 음성 등가값
+  		          }
+  		          break;
+  		      }
+
 
 	//6바이트 2진 패킹
 	uint8_t payload[6];
@@ -386,12 +356,16 @@ void transmit_sensor_data(void){
 	//최종 데이터 발송
 	nrf24_transmit(payload, 6);
 
-	//uart디버깅
-	char dbg[64];
-	int dlen = snprintf(dbg, sizeof(dbg), "X: %u | Y: %u | Z: %u\r\n", x, y, z);
-	HAL_UART_Transmit(&huart2, (uint8_t*)dbg, dlen, 100);
+		      // 6) 디버그 로그
+	const char* s = (g_state==ST_JOYSTICK)?"JOY":(g_state==ST_VOICE)?"VOICE":"IDLE";
+	if (g_state==ST_VOICE) {
+    printf("TX[%s] CMD:0x%02X | X:%u Y:%u Z:%u\r\n", s, last_cmd, tx_x, tx_y, tx_z);
+    } else {
+    printf("TX[%s] X:%u Y:%u Z:%u\r\n", s, tx_x, tx_y, tx_z);
+		 }
+  }
 
-}
+
 
 //타이머가 만료될 때마다 호출되는 콜백함수 20ms주기
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
