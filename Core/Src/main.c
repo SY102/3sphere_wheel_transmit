@@ -52,6 +52,7 @@
 #include "NRF24_reg_addresses.h"
 #include "voice_proto.h"
 #include "stdlib.h"//절대값(abs)
+#include "stdbool.h"
 
 /* USER CODE END Includes */
 
@@ -121,7 +122,8 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void nrf24_transmitter_setup(void);
 void transmit_sensor_data(void);
-
+static bool joystick_is_active(int x, int y, int z);
+//static inline int  iabs_int(int v) { return v>=0? v : -v; };
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -129,9 +131,6 @@ void transmit_sensor_data(void);
 
 
 
-void transmit_sensor_data(void);
-static bool joystick_is_active(int x, int y, int z);
-static inline int  iabs_int(int v) { return v>=0? v : -v; };
 
 
 /* USER CODE END 0 */
@@ -271,7 +270,7 @@ nrf24_clear_tx_ds();
 nrf24_clear_max_rt();
 nrf24_stop_listen();                        //수신모드 비활성화 하여 송신 전용 모드로 전환
 nrf24_set_channel(40);                      //무선 채널 40번으로 설정
-nrf24_auto_ack_all(disable);                //자동 ack기능 off=>단순 송신만 수행
+nrf24_auto_ack_all(0);                //자동 ack기능 off=>단순 송신만 수행
 nrf24_set_payload_size(6);                  //한번에 전송할 페이로드 크기 최대 32바이트
 nrf24_tx_pwr(3);
 nrf24_data_rate(_1mbps);

@@ -27,25 +27,25 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  11 .ARM.attributes 00000029  00000000  00000000  00008070  2**0
                   CONTENTS, READONLY
- 12 .debug_info   00012aa3  00000000  00000000  00008099  2**0
+ 12 .debug_info   00012a84  00000000  00000000  00008099  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_abbrev 00003495  00000000  00000000  0001ab3c  2**0
+ 13 .debug_abbrev 000034a8  00000000  00000000  0001ab1d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_aranges 00001328  00000000  00000000  0001dfd8  2**3
+ 14 .debug_aranges 00001328  00000000  00000000  0001dfc8  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_rnglists 00000ebf  00000000  00000000  0001f300  2**0
+ 15 .debug_rnglists 00000ebf  00000000  00000000  0001f2f0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_macro  0001ac3b  00000000  00000000  000201bf  2**0
+ 16 .debug_macro  0001ac3b  00000000  00000000  000201af  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_line   000169be  00000000  00000000  0003adfa  2**0
+ 17 .debug_line   000169be  00000000  00000000  0003adea  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_str    00093d0d  00000000  00000000  000517b8  2**0
+ 18 .debug_str    00093d0d  00000000  00000000  000517a8  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .comment      00000043  00000000  00000000  000e54c5  2**0
+ 19 .comment      00000043  00000000  00000000  000e54b5  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  0000558c  00000000  00000000  000e5508  2**2
+ 20 .debug_frame  0000558c  00000000  00000000  000e54f8  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 00000064  00000000  00000000  000eaa94  2**0
+ 21 .debug_line_str 00000064  00000000  00000000  000eaa84  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -2280,7 +2280,7 @@ nrf24_stop_listen();                        //수신모드 비활성화 하여 �
 nrf24_set_channel(40);                      //무선 채널 40번으로 설정
  8000e7e:	2028      	movs	r0, #40	@ 0x28
  8000e80:	f7ff fa7f 	bl	8000382 <nrf24_set_channel>
-nrf24_auto_ack_all(disable);                //자동 ack기능 off=>단순 송신만 수행
+nrf24_auto_ack_all(0);                //자동 ack기능 off=>단순 송신만 수행
  8000e84:	2000      	movs	r0, #0
  8000e86:	f7ff fc77 	bl	8000778 <nrf24_auto_ack_all>
 nrf24_set_payload_size(6);                  //한번에 전송할 페이로드 크기 최대 32바이트
