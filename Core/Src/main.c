@@ -75,9 +75,9 @@ volatile uint8_t  adc_data_ready_flag = 0;
 volatile uint32_t adc_cb_cnt = 0;
 volatile uint16_t adc_buffer[3] = {0};	//ADC가 변환한 x, y, z값을 DMA가 담는 버퍼 - x, y, z 3개
 volatile uint8_t adc_conversion_complete = 0;
-
+volatile uint32_t g_stop_until_ms = 0;
 uint8_t payload[6];
-
+static uint32_t last_pb9_press_time = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -131,6 +131,7 @@ int main(void)
   MX_DMA_Init();
   MX_SPI1_Init();
   MX_USART2_UART_Init();
+
   MX_ADC1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
@@ -143,7 +144,7 @@ HAL_TIM_Base_Start_IT(&htim2);
 
 nrf24_init();
 nrf24_transmitter_setup();
-
+printf("nRF Setup OK\r\n");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -216,6 +217,25 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    // PB9 핀에서 인터럽트가 발생했는지 확인
+    if(GPIO_Pin == GPIO_PIN_8)
+    {
+        // --- 소프트웨어 디바운싱 (노이즈 제거) ---
+        uint32_t current_time = HAL_GetTick();
+        if (current_time - last_pb9_press_time < 300) // 0.3초 이내의 재입력은 무시
+        {
+            return; // 바운싱으로 간주하고 무시
+        }
+        last_pb9_press_time = current_time;
+        // --- 디바운싱 끝 ---
+
+        // "3초 뒤" 시간을 g_stop_until_ms 변수에 저장
+        // HAL_Delay()를 쓰는 게 아님!
+        g_stop_until_ms = current_time + 3000; // 3000ms = 3초
+    }
+}
 
 void nrf24_transmitter_setup(void)
 
@@ -247,46 +267,6 @@ HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, HAL_MAX_DELAY);
 return ch;
 }
 
-
-
-void transmit_sensor_data(void){
-	adc_conversion_complete = 0;
-
-	uint16_t local_adc_buffer[3];
-
-	//adc_buffer값을 local_adc_buffer에 복사
-	__disable_irq(); //복사중 모든 인터럽트 중지
-	memcpy(local_adc_buffer, (void*)adc_buffer, sizeof(adc_buffer));
-	__enable_irq(); //인터럽트 허용
-/*memcpy함수는 메모리 특정 영역을 다른 영역으로 복사한다
- *함수 기본형태-void *memcpy(붙여넣을 메모리 시작주소, 복사할 내용이 있는 메모리 시작주소, sizeof(원본);
- *함수
- */
-
-	uint16_t x = local_adc_buffer[0];
-	uint16_t y = local_adc_buffer[1];
-	uint16_t z = local_adc_buffer[2];
-
-	//6바이트 2진 패킹
-	uint8_t payload[6];
-	payload[0] = (uint8_t)(x & 0xff);	//x하위8비트
-	payload[1] = (uint8_t)(x >> 8);		//x상위8비트 시프트
-	payload[2] = (uint8_t)(y & 0xff);	//y하위8비트
-	payload[3] = (uint8_t)(y >> 8);		//y상위8비트
-	payload[4] = (uint8_t)(z & 0xff);	//z하위8비트
-	payload[5] = (uint8_t)(z >> 8);		//z상위8비트
-
-	//최종 데이터 발송
-	nrf24_transmit(payload, 6);
-
-	//uart디버깅
-	char dbg[64];
-	int dlen = snprintf(dbg, sizeof(dbg), "X: %u | Y: %u | Z: %u\r\n", x, y, z);
-	HAL_UART_Transmit(&huart2, (uint8_t*)dbg, dlen, 100);
-
-}
-
-//타이머가 만료될 때마다 호출되는 콜백함수 20ms주기
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     // 이벤트가 발생한 타이머가 TIM2인지 확인
@@ -295,6 +275,67 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     	//3개의 ADC값을 변환해서 그 결과를 adc_buffer에 DMA로 저장 시작
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 3);
     }
+}
+
+void transmit_sensor_data(void){
+	adc_conversion_complete = 0;
+
+		uint16_t x, y, z; // x, y, z 변수를 함수 상단으로 이동
+
+		// --- ★★★ 여기부터 수정 ★★★ ---
+		uint32_t current_time = HAL_GetTick();
+
+		// 1. "3초 정지" 알람이 켜져있는지(0이 아닌지) 확인
+		if (g_stop_until_ms != 0) {
+
+			if (current_time < g_stop_until_ms) {
+				// 2. [정지] 아직 3초가 안 지났으면: "정지" 신호(중립 값) 전송
+				// (수신부의 ADC 중립 값이 2045였습니다)
+				x = 2045;
+				y = 2045;
+				z = 2045;
+			} else {
+				// 3. [복귀] 3초가 지났으면: 알람을 끄고 정상 복귀
+				g_stop_until_ms = 0; // 알람 리셋
+
+				// 정상 조이스틱 값 읽기
+				uint16_t local_adc_buffer[3];
+				__disable_irq();
+				memcpy(local_adc_buffer, (void*)adc_buffer, sizeof(adc_buffer));
+				__enable_irq();
+				x = local_adc_buffer[0];
+				y = local_adc_buffer[1];
+				z = local_adc_buffer[2];
+			}
+		} else {
+			// 4. [정상] 알람이 꺼져있으면: 정상 조이스틱 값 읽기
+			uint16_t local_adc_buffer[3];
+			__disable_irq();
+			memcpy(local_adc_buffer, (void*)adc_buffer, sizeof(adc_buffer));
+			__enable_irq();
+			x = local_adc_buffer[0];
+			y = local_adc_buffer[1];
+			z = local_adc_buffer[2];
+		}
+		// --- ★★★ 여기까지 수정 ★★★ ---
+
+
+		// 6바이트 2진 패킹 (이 부분은 동일)
+		uint8_t payload[6];
+		payload[0] = (uint8_t)(x & 0xff);	//x하위8비트
+		payload[1] = (uint8_t)(x >> 8);		//x상위8비트 시프트
+		payload[2] = (uint8_t)(y & 0xff);	//y하위8비트
+		payload[3] = (uint8_t)(y >> 8);		//y상위8비트
+		payload[4] = (uint8_t)(z & 0xff);	//z하위8비트
+		payload[5] = (uint8_t)(z >> 8);		//z상위8비트
+
+		//최종 데이터 발송
+		nrf24_transmit(payload, 6);
+
+		//uart디버깅
+		char dbg[64];
+		int dlen = snprintf(dbg, sizeof(dbg), "X: %u | Y: %u | Z: %u\r\n", x, y, z);
+		HAL_UART_Transmit(&huart2, (uint8_t*)dbg, dlen, 100);
 }
 
 
