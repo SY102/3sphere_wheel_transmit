@@ -387,7 +387,7 @@ void transmit_sensor_data(void){
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     // GPIO_PIN_8 (E-Stop 버튼 핀)에서 인터럽트가 발생했는지 확인
-    if(GPIO_Pin == GPIO_PIN_8) // 핀 번호가 맞는지 확인해주세요.
+    if(GPIO_Pin == GPIO_PIN_6) // 핀 번호가 맞는지 확인해주세요.
     {
     	printf("!!! E-STOP BUTTON PRESSED !!!\r\n");
         // --- 소프트웨어 디바운싱 (노이즈 제거) ---
