@@ -78,19 +78,14 @@ typedef struct { uint16_t x,y,z; } triplet_t;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-extern ADC_HandleTypeDef hadc1;
-extern TIM_HandleTypeDef htim2;
-extern UART_HandleTypeDef huart2;
-extern UART_HandleTypeDef huart3;
-extern DMA_HandleTypeDef hdma_adc1;
-extern SPI_HandleTypeDef hspi1;
 
 /* USER CODE BEGIN PV */
 uint8_t tx_address[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
 
 volatile uint16_t adc_buffer[3] = {0};	//ADC가 변환한 x, y, z값을 DMA가 담는 버퍼 - x, y, z 3개
 volatile uint8_t adc_conversion_complete = 0;
-
+volatile uint32_t g_stop_until_ms = 0; // E-Stop 해제 시간
+static uint32_t last_pb9_press_time = 0; // 디바운싱용
 
 volatile uint8_t  adc_data_ready_flag = 0;
 volatile uint32_t adc_cb_cnt = 0;
@@ -116,9 +111,6 @@ uint8_t payload[6];
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-
-
-
 /* USER CODE BEGIN PFP */
 void nrf24_transmitter_setup(void);
 void transmit_sensor_data(void);
@@ -288,7 +280,6 @@ HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, HAL_MAX_DELAY);
 return ch;
 }
 
-
 void transmit_sensor_data(void){
 	adc_conversion_complete = 0;
 
@@ -298,50 +289,76 @@ void transmit_sensor_data(void){
     y = adc_buffer[1];
     z = adc_buffer[2];
     __enable_irq();
-    // 2) 조이스틱 활성 판정
-  	 bool active = joystick_is_active((int)x,(int)y,(int)z);
 
-  	      // 3) (조이스틱 중립일 때만) 음성 프레임 소비
-  	 if (!active && Voice_FrameAvailable()){
-  	 voice_frame_t vf;
-  	 __disable_irq();
-  	 bool ok = Voice_TryPopFrame(&vf);
-  	 __enable_irq();
-     if (ok && vf.cmd >= 0x01 && vf.cmd <= 0x05){
-     last_cmd = vf.cmd;
-     g_state  = ST_VOICE;       // 음성 모드 진입
-  	  }
+    // ★★★★★ E-Stop 로직 삽입 시작 ★★★★★
+    uint32_t current_time = HAL_GetTick();
+
+    if (g_stop_until_ms != 0) { // E-Stop 상태인가?
+        if (current_time < g_stop_until_ms) {
+            // [정지] 아직 3초가 안 지났으면: 강제 중립값(정지) 전송
+            x = ADC_NEU;
+            y = ADC_NEU;
+            z = ADC_NEU;
+            // E-Stop 중에는 상태 머신 로직을 스킵하고 바로 전송합니다.
+        } else {
+            // [복귀] 3초가 지났으면: E-Stop 해제 및 상태 머신으로 복귀
+            g_stop_until_ms = 0;
+        }
     }
-  	// 4) 상태머신으로 이번 주기 전송값 결정
-  		      uint16_t tx_x = ADC_NEU, tx_y = ADC_NEU, tx_z = ADC_NEU;
+    // ★★★★★ E-Stop 로직 삽입 끝 ★★★★★
 
-  		      switch (g_state)
-  		      {
-  		        case ST_IDLE:
-  		          if (active) g_state = ST_JOYSTICK;
-  		          // IDLE은 정지값 유지(송신은 해도 되고 안 해도 됨: 여기선 보냄)
-  		          break;
 
-  		        case ST_JOYSTICK:
-  		          if (!active){
-  		            g_state = ST_IDLE;
-  		          } else {
-  		            tx_x = x; tx_y = y; tx_z = z;      // 조이스틱 값 그대로
-  		          }
-  		          break;
+    // E-Stop 상태가 아니거나 E-Stop 시간이 끝났다면, 기존 로직을 실행
+    if (g_stop_until_ms == 0) {
 
-  		        case ST_VOICE:
-  		        default:
-  		          if (active){
-  		            g_state = ST_JOYSTICK;            // 조이스틱 우선
-  		            tx_x = x; tx_y = y; tx_z = z;
-  		          } else {
-  		            triplet_t t = VOICE_MAP[last_cmd];
-  		            tx_x = t.x; tx_y = t.y; tx_z = t.z; // 음성 등가값
-  		          }
-  		          break;
-  		      }
+        // 2) 조이스틱 활성 판정
+        bool active = joystick_is_active((int)x,(int)y,(int)z);
 
+        // 3) (조이스틱 중립일 때만) 음성 프레임 소비
+        if (!active && Voice_FrameAvailable()){
+            voice_frame_t vf;
+            __disable_irq();
+            bool ok = Voice_TryPopFrame(&vf);
+            __enable_irq();
+            if (ok && vf.cmd >= 0x01 && vf.cmd <= 0x05){
+                last_cmd = vf.cmd;
+                g_state  = ST_VOICE;       // 음성 모드 진입
+            }
+        }
+
+        // 4) 상태머신으로 이번 주기 전송값 결정
+        uint16_t tx_x = ADC_NEU, tx_y = ADC_NEU, tx_z = ADC_NEU;
+
+        switch (g_state)
+        {
+          case ST_IDLE:
+            if (active) g_state = ST_JOYSTICK;
+            break;
+
+          case ST_JOYSTICK:
+            if (!active){
+              g_state = ST_IDLE;
+            } else {
+              tx_x = x; tx_y = y; tx_z = z;      // 조이스틱 값 그대로
+            }
+            break;
+
+          case ST_VOICE:
+          default:
+            if (active){
+              g_state = ST_JOYSTICK;            // 조이스틱 우선
+              tx_x = x; tx_y = y; tx_z = z;
+            } else {
+              triplet_t t = VOICE_MAP[last_cmd];
+              tx_x = t.x; tx_y = t.y; tx_z = t.z; // 음성 등가값
+            }
+            break;
+        }
+
+        // 5) 최종 전송할 페이로드를 E-Stop 로직 밖에서 설정합니다.
+        // E-Stop 로직에서 x, y, z 값이 이미 결정되었으므로, E-Stop이 아닐 때만 tx_x, tx_y, tx_z를 사용합니다.
+        x = tx_x; y = tx_y; z = tx_z;
+    } // g_stop_until_ms == 0 (E-Stop 아닐 때) 끝
 
 	//6바이트 2진 패킹
 	uint8_t payload[6];
@@ -355,16 +372,37 @@ void transmit_sensor_data(void){
 	//최종 데이터 발송
 	nrf24_transmit(payload, 6);
 
-		      // 6) 디버그 로그
-	const char* s = (g_state==ST_JOYSTICK)?"JOY":(g_state==ST_VOICE)?"VOICE":"IDLE";
-	if (g_state==ST_VOICE) {
-    printf("TX[%s] CMD:0x%02X | X:%u Y:%u Z:%u\r\n", s, last_cmd, tx_x, tx_y, tx_z);
+    // 6) 디버그 로그 (tx_x, tx_y, tx_z가 아닌 실제 전송된 x,y,z 값을 사용)
+	const char* s = (g_stop_until_ms != 0) ? "E-STOP" : (g_state==ST_JOYSTICK)?"JOY":(g_state==ST_VOICE)?"VOICE":"IDLE";
+	if (g_stop_until_ms != 0) {
+        printf("TX[%s] STOP (until:%lu)\r\n", s, g_stop_until_ms);
+	} else if (g_state==ST_VOICE) {
+        printf("TX[%s] CMD:0x%02X | X:%u Y:%u Z:%u\r\n", s, last_cmd, x, y, z);
     } else {
-    printf("TX[%s] X:%u Y:%u Z:%u\r\n", s, tx_x, tx_y, tx_z);
-		 }
-  }
+        printf("TX[%s] X:%u Y:%u Z:%u\r\n", s, x, y, z);
+    }
+}
 
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    // GPIO_PIN_8 (E-Stop 버튼 핀)에서 인터럽트가 발생했는지 확인
+    if(GPIO_Pin == GPIO_PIN_8) // 핀 번호가 맞는지 확인해주세요.
+    {
+    	printf("!!! E-STOP BUTTON PRESSED !!!\r\n");
+        // --- 소프트웨어 디바운싱 (노이즈 제거) ---
+        uint32_t current_time = HAL_GetTick();
+        if (current_time - last_pb9_press_time < 300) // 0.3초 이내의 재입력은 무시
+        {
+            return; // 바운싱으로 간주하고 무시
+        }
+        last_pb9_press_time = current_time;
+        // --- 디바운싱 끝 ---
+
+        // E-Stop 발생: "3초 뒤" 시간을 g_stop_until_ms 변수에 저장
+        g_stop_until_ms = current_time + 3000; // 3000ms = 3초 정지
+    }
+}
 
 //타이머가 만료될 때마다 호출되는 콜백함수 20ms주기
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
