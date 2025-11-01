@@ -131,7 +131,6 @@ int main(void)
   MX_DMA_Init();
   MX_SPI1_Init();
   MX_USART2_UART_Init();
-
   MX_ADC1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
@@ -220,10 +219,13 @@ void SystemClock_Config(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     // PB9 핀에서 인터럽트가 발생했는지 확인
-    if(GPIO_Pin == GPIO_PIN_8)
+    if(GPIO_Pin == GPIO_PIN_6)
     {
         // --- 소프트웨어 디바운싱 (노이즈 제거) ---
         uint32_t current_time = HAL_GetTick();
+
+        printf("!!! E-STOP BUTTON PRESSED on PB9 !!!\r\n"); // 디버그 로그
+
         if (current_time - last_pb9_press_time < 300) // 0.3초 이내의 재입력은 무시
         {
             return; // 바운싱으로 간주하고 무시
