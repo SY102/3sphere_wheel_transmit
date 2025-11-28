@@ -66,9 +66,9 @@ typedef struct { uint16_t x,y,z; } triplet_t;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ADC_MAX 4020    // 실제 최대값
+#define ADC_MAX 4090    // 실제 최대값
 #define ADC_MIN 0
-#define ADC_NEU 2010	//ADC 중간값 4020/2
+#define ADC_NEU 2045	//ADC 중간값 4020/2
 #define ADC_DEAD_ZONE 300	//데드존 처리
 
 /* USER CODE END PD */
@@ -96,12 +96,12 @@ static volatile ctrl_state_t g_state = ST_IDLE;
 static uint8_t last_cmd = 0x03;           // 기본 정지(STOP)
 
 static const triplet_t VOICE_MAP[6] = {
-/*0*/ {0,0,0},
-/*1 FWD  */ {2000,3000,2000},
-/*2 BACK */ {2000,1000,2000},
-/*3 STOP */ {2000,2000,2000},
-/*4 LEFT */ {1000,2000,2000},
-/*5 RIGHT*/ {3000,2000,2000},
+/*0*/ {ADC_NEU,ADC_NEU,ADC_NEU},
+/*1 FWD  */ {ADC_NEU,4090,ADC_NEU},
+/*2 BACK */ {ADC_NEU,0,ADC_NEU},
+/*3 STOP */ {ADC_NEU,ADC_NEU,ADC_NEU},
+/*4 LEFT */ {0,ADC_NEU,ADC_NEU},
+/*5 RIGHT*/ {4090,ADC_NEU,ADC_NEU},
 };
 
 
@@ -283,12 +283,16 @@ return ch;
 void transmit_sensor_data(void){
 	adc_conversion_complete = 0;
 
-	uint16_t x,y,z;
-    __disable_irq();
-    x = adc_buffer[0];
-    y = adc_buffer[1];
-    z = adc_buffer[2];
-    __enable_irq();
+	// 1. 최신 ADC 값 안전하게 복사
+	uint16_t local_adc_buffer[3];
+	__disable_irq();
+	memcpy(local_adc_buffer, (void*)adc_buffer, sizeof(adc_buffer));
+	__enable_irq();
+
+
+	uint16_t x = local_adc_buffer[0];
+		uint16_t y = local_adc_buffer[1];
+		uint16_t z = local_adc_buffer[2];
 
     // ★★★★★ E-Stop 로직 삽입 시작 ★★★★★
     uint32_t current_time = HAL_GetTick();
@@ -300,6 +304,11 @@ void transmit_sensor_data(void){
             y = ADC_NEU;
             z = ADC_NEU;
             // E-Stop 중에는 상태 머신 로직을 스킵하고 바로 전송합니다.
+
+            // [추가된 부분] 상태 머신과 마지막 명령을 초기화합니다!
+                        g_state = ST_IDLE;      // 상태를 대기 모드로 강제 변경
+                        last_cmd = 0x03;        // 마지막 명령을 STOP(0x03)으로 초기화
+
         } else {
             // [복귀] 3초가 지났으면: E-Stop 해제 및 상태 머신으로 복귀
             g_stop_until_ms = 0;
@@ -387,7 +396,7 @@ void transmit_sensor_data(void){
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     // GPIO_PIN_8 (E-Stop 버튼 핀)에서 인터럽트가 발생했는지 확인
-    if(GPIO_Pin == GPIO_PIN_6) // 핀 번호가 맞는지 확인해주세요.
+    if(GPIO_Pin == GPIO_PIN_8) // 핀 번호가 맞는지 확인해주세요.
     {
     	printf("!!! E-STOP BUTTON PRESSED !!!\r\n");
         // --- 소프트웨어 디바운싱 (노이즈 제거) ---
