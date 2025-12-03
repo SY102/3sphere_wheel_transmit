@@ -291,8 +291,8 @@ void transmit_sensor_data(void){
 
 
 	uint16_t x = local_adc_buffer[0];
-		uint16_t y = local_adc_buffer[1];
-		uint16_t z = local_adc_buffer[2];
+    uint16_t y = local_adc_buffer[1];
+	uint16_t z = local_adc_buffer[2];
 
     // ★★★★★ E-Stop 로직 삽입 시작 ★★★★★
     uint32_t current_time = HAL_GetTick();
@@ -305,7 +305,7 @@ void transmit_sensor_data(void){
             z = ADC_NEU;
             // E-Stop 중에는 상태 머신 로직을 스킵하고 바로 전송합니다.
 
-            // [추가된 부분] 상태 머신과 마지막 명령을 초기화합니다!
+
                         g_state = ST_IDLE;      // 상태를 대기 모드로 강제 변경
                         last_cmd = 0x03;        // 마지막 명령을 STOP(0x03)으로 초기화
 
