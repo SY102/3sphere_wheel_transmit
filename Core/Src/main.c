@@ -69,7 +69,7 @@ typedef struct { uint16_t x,y,z; } triplet_t;
 #define ADC_MAX 4090    // 실제 최대값
 #define ADC_MIN 0
 #define ADC_NEU 2045	//ADC 중간값 4020/2
-#define ADC_DEAD_ZONE 300	//데드존 처리
+#define ADC_DEAD_ZONE 500	//데드존 처리
 
 /* USER CODE END PD */
 
@@ -261,7 +261,7 @@ nrf24_clear_rx_dr();
 nrf24_clear_tx_ds();
 nrf24_clear_max_rt();
 nrf24_stop_listen();                        //수신모드 비활성화 하여 송신 전용 모드로 전환
-nrf24_set_channel(40);                      //무선 채널 40번으로 설정
+nrf24_set_channel(77);                      //무선 채널 40번으로 설정
 nrf24_auto_ack_all(0);                //자동 ack기능 off=>단순 송신만 수행
 nrf24_set_payload_size(6);                  //한번에 전송할 페이로드 크기 최대 32바이트
 nrf24_tx_pwr(3);
